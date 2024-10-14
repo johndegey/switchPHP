@@ -19,7 +19,7 @@
 
 # CUSTOMIZE TO YOUR NEEDS
 # Ex: AVAILABLE_PHP_VERSIONS="7.1 7.2 7.3"
-AVAILABLE_PHP_VERSIONS="5.6 7.1 7.2 7.3 7.4"
+AVAILABLE_PHP_VERSIONS="5.6 7.1 7.2 7.3 7.4 8.0 8.1 8.2 8.3"
 # END CUSTOMIZE
 
 ASKED_PHP_VERSION=$1
@@ -28,14 +28,16 @@ ASKED_PHP_VERSION=$1
 ESC="\033["
 ECHO="/bin/echo"
 SUDO="/usr/bin/sudo"
-CUT="/usr/bin/cut" 
+CUT="/usr/bin/cut"
 REV="/usr/bin/rev"
 GREP="/bin/grep"
+LS='/usr/bin/ls'
 TR='/usr/bin/tr'
 HEAD="/usr/bin/head"
 FILE="/usr/bin/file"
 BASENAME="/usr/bin/basename"
 DISMOD="/usr/sbin/a2dismod"
+A2QUERY="/usr/sbin/a2query"
 ENMOD="/usr/sbin/a2enmod"
 SYSTEMCTL="/bin/systemctl"
 UPDATE_ALTERNATIVES="/usr/bin/update-alternatives"
@@ -62,6 +64,7 @@ SUCCESS="${GREEN}success${NORMAL}"
 FAILED="${ITALIC}${RED}failed${NORMAL}"
 ABORT="${ITALIC}${RED}abort${NORMAL}"
 
+MPMPREFORK_INSTALLED=0
 PHPCLI_INSTALLED=0
 PHPMOD_INSTALLED=0
 PHAR_INSTALLED=0
@@ -99,10 +102,23 @@ GET_VERSION_PHP_API() {
     ${PHP_BASEDIR}/${PHP} --info | $GREP ^'PHP API'| $CUT -d" " -f4
 }
 
+CHECK_MODULE_MPM_PREFORK() {
+    local MPMPREFORK=$($A2QUERY -m mpm_prefork 2>/dev/null)
+    if [ "$MPMPREFORK" = "No module matches mpm_prefork (disabled by site administrator)" ]
+    then
+      MPMPREFORK_INSTALLED=1
+    fi
+}
+
 GET_BASE_VERSION_PHP_MOD() {
-    local PMFILE=$($BASENAME $(ls ${APACHE_ENABLED_MODS}/${PHP}*.conf))
-    local PMVERSION=$($ECHO $PMFILE | $CUT -d"p" -f3 | $REV | $CUT -d"." -f2- | $REV)
-    $ECHO $PMVERSION
+    local MODS=$($LS ${APACHE_ENABLED_MODS}/${PHP}*.conf 2> /dev/null )
+    if [ -z ${MODS+x} ]
+    then
+      local PMFILE=$($BASENAME $MODS)
+      $ECHO $PMFILE
+      local PMVERSION=$($ECHO $PMFILE | $CUT -d"p" -f3 | $REV | $CUT -d"." -f2- | $REV)
+      $ECHO $PMVERSION
+    fi
 }
 
 GET_FULL_VERSION_PHP_MOD() {
@@ -159,7 +175,7 @@ GET_PHPIZE_INSTALLED_LINKEDTO() {
         LINK=$(EXTRACT_LINK "${PHPIZE_LINK}")
         #echo EXTRACT LINK : $LINK
         PHPIZE_LINK=$(IS_LINK $LINK)
-    done       
+    done
     echo $LINK
 }
 
@@ -177,21 +193,28 @@ PRINT_USAGE() {
         $ECHO "Current php cli :" $PHPCLI_FULL_VERSION_INSTALLED
     else
         $ECHO -e "${ITALIC}${RED}php cli not found${NORMAL}"
-    fi        
-    if [ "$PHPMOD_INSTALLED" = "1" ]
+    fi
+
+    if [ "$MPMPREFORK_INSTALLED" = "1" ]
     then
-        if [ "$PHPCLI_INSTALLED" = "1" -a "$PHPMOD_CLI_COMPATIBLE" = "1" ] 
-        then
-            $ECHO "Current php mod :" $PHPMOD_FULL_VERSION_INSTALLED
-        else
-            $ECHO "Current php mod :" $PHPMOD_BASE_VERSION_INSTALLED
-            $ECHO -e "${ITALIC}${RED}php cli and php mod are from different PHP versions !!!${NORMAL}"
-        fi    
+      if [ "$PHPMOD_INSTALLED" = "1" ]
+      then
+          if [ "$PHPCLI_INSTALLED" = "1" -a "$PHPMOD_CLI_COMPATIBLE" = "1" ]
+          then
+              $ECHO "Current php mod :" $PHPMOD_FULL_VERSION_INSTALLED
+          else
+              $ECHO "Current php mod :" $PHPMOD_BASE_VERSION_INSTALLED
+              $ECHO -e "${ITALIC}${RED}php cli and php mod are from different PHP versions !!!${NORMAL}"
+          fi
+      else
+          $ECHO -e "${ITALIC}${BLUE}php mod not found${NORMAL}"
+      fi
     else
-        $ECHO -e "${ITALIC}${BLUE}php mod not found${NORMAL}"
-    fi 
+        $ECHO -e "${ITALIC}${BLUE}Module mpm_prefork not enabled${NORMAL}"
+    fi
+
     if [ "$PHAR_INSTALLED" = "1" ]
-    then   
+    then
         $ECHO "Current phar linked to :" $PHAR_FULL_VERSION_INSTALLED
         if [ "$PHPCLI_INSTALLED" = "1" -a "$PHAR_CLI_COMPATIBLE" = "0" ]
         then
@@ -199,9 +222,9 @@ PRINT_USAGE() {
         fi
     else
         $ECHO -e "${ITALIC}${RED}phar not found${NORMAL}"
-    fi        
+    fi
     if [ "$PHARPHAR_INSTALLED" = "1" ]
-    then   
+    then
         $ECHO "Current phar.phar linked to :" $PHARPHAR_FULL_VERSION_INSTALLED
         if [ "$PHPCLI_INSTALLED" = "1" -a "$PHARPHAR_CLI_COMPATIBLE" = "0" ]
         then
@@ -209,31 +232,31 @@ PRINT_USAGE() {
         fi
     else
         $ECHO -e "${ITALIC}${BLUE}phar.phar not found${NORMAL}"
-    fi        
+    fi
     if [ "$PHPIZE_INSTALLED" = "1" ]
     then
         if [ "$PHPIZE_CLI_COMPATIBLE" = "1" ]
-        then   
+        then
             $ECHO "Current phpize linked to :" $PHPCLI_FULL_VERSION_INSTALLED
         else
             $ECHO "Current phpize linked to :" $PHP$PHPIZE_BASE_VERSION_INSTALLED
             $ECHO -e "${ITALIC}${RED}php cli and phpize are from different PHP versions !!!${NORMAL}"
-        fi    
+        fi
     else
         $ECHO -e "${ITALIC}${BLUE}phpize not found${NORMAL}"
-    fi        
+    fi
     if [ "$PHPCONFIG_INSTALLED" = "1" ]
     then
         if [ "$PHPCONFIG_CLI_COMPATIBLE" = "1" ]
-        then   
+        then
             $ECHO "Current php-config linked to :" $PHPCONFIG_FULL_VERSION_INSTALLED
         else
             $ECHO "Current php-config linked to php api :" ${PHP}${PHPCONFIG_FULL_VERSION_INSTALLED}
             $ECHO -e "${ITALIC}${RED}php cli and php-config are from different PHP versions !!!${NORMAL}"
-        fi    
+        fi
     else
         $ECHO -e "${ITALIC}${BLUE}php-config not found${NORMAL}"
-    fi        
+    fi
 }
 
 # Check if php cli is installed and get version
@@ -242,7 +265,7 @@ then
     PHPCLI_INSTALLED=1
     PHPCLI_FULL_VERSION_INSTALLED=$(GET_FULL_VERSION_PHP_CLI)
     PHPCLI_BASE_VERSION_INSTALLED=$(GET_BASE_VERSION_PHP_CLI)
-    #PHPAPI_VERSION_INSTALLED=$(GET_VERSION_PHP_API)    
+    #PHPAPI_VERSION_INSTALLED=$(GET_VERSION_PHP_API)
 fi
 
 # Check if phar is installed and get version
@@ -250,7 +273,7 @@ if [ -e "${PHP_BASEDIR}/${PHAR}" ]
 then
     PHAR_INSTALLED=1
     PHAR_FULL_VERSION_INSTALLED=$(GET_FULL_VERSION_PHAR)
-    PHAR_BASE_VERSION_INSTALLED=$(GET_BASE_VERSION_PHAR)    
+    PHAR_BASE_VERSION_INSTALLED=$(GET_BASE_VERSION_PHAR)
     if [ "$PHPCLI_INSTALLED" = "1" -a "$PHAR_BASE_VERSION_INSTALLED" = "$PHPCLI_BASE_VERSION_INSTALLED" ]
     then
         PHAR_CLI_COMPATIBLE=1
@@ -262,7 +285,7 @@ if [ -e "${PHP_BASEDIR}/${PHARPHAR}" ]
 then
     PHARPHAR_INSTALLED=1
     PHARPHAR_FULL_VERSION_INSTALLED=$(GET_FULL_VERSION_PHARPHAR)
-    PHARPHAR_BASE_VERSION_INSTALLED=$(GET_BASE_VERSION_PHARPHAR)    
+    PHARPHAR_BASE_VERSION_INSTALLED=$(GET_BASE_VERSION_PHARPHAR)
     if [ "$PHPCLI_INSTALLED" = "1" -a "$PHARPHAR_BASE_VERSION_INSTALLED" = "$PHPCLI_BASE_VERSION_INSTALLED" ]
     then
         PHARPHAR_CLI_COMPATIBLE=1
@@ -270,7 +293,7 @@ then
 fi
 
 # Check if php mod is installed and get version
-if [ -a ${APACHE_ENABLED_MODS}/${PHP}*.conf ]
+if [ -n "$(find ${APACHE_ENABLED_MODS} -maxdepth 1 -name "${PHP}*.conf" -print -quit)" ]
 then
     PHPMOD_INSTALLED=1
     PHPMOD_BASE_VERSION_INSTALLED=$(GET_BASE_VERSION_PHP_MOD)
@@ -305,6 +328,8 @@ then
     fi
 fi
 
+$(CHECK_MODULE_MPM_PREFORK)
+
 if [ "$1" = "-h" -o "$1" = "--help" ]
 then
     PRINT_USAGE
@@ -316,7 +341,7 @@ then
     $ECHO -e "php cli & php mod not found [${ABORT}]"
     exit 1;
 fi
- 
+
 for AVAILABLE_PHP_VERSION in $AVAILABLE_PHP_VERSIONS
 do
     if [ "$AVAILABLE_PHP_VERSION" = "$ASKED_PHP_VERSION" ]
@@ -329,45 +354,49 @@ do
         SHOW_USAGE=0
 
         # apache php mod
-        ASKED_PHPMOD_INSTALLED="${APACHE_AVAILABLE_MODS}/${PHP}${ASKED_PHP_VERSION}.conf"
-        if [ -e "$ASKED_PHPMOD_INSTALLED" ]
+        if [ "$MPMPREFORK_INSTALLED" = "1" ]
         then
-            if [ "$PHPMOD_BASE_VERSION_INSTALLED" != "$ASKED_PHP_VERSION" ]
-            then
-                if [ "$PHPMOD_INSTALLED" = "1" ]
-                then
-                    OLD_PHP_VERSION="${PHP}${PHPMOD_BASE_VERSION_INSTALLED}"
-                    $SUDO $DISMOD $OLD_PHP_VERSION > /dev/null
-                fi    
-                $SUDO $ENMOD $NEW_PHP_VERSION > /dev/null         
-                if [ $? = "0" ]
-                then
-                    $ECHO -e "Switch php mod to $NEW_PHP_VERSION [${SUCCESS}]"
-                    $SUDO $SYSTEMCTL restart apache2
-                    if [ $? = "0" ]
-                    then
-                        $ECHO -e "Restart of apache [${SUCCESS}]"
-                    else
-                        $ECHO -e "Restart of apache [${FAILED}]"
-                    fi
-                else
-                    $ECHO -e "Switch php mod to $NEW_PHP_VERSION [${FAILED}]"
-                fi
-            else
-                $ECHO "php mod already set to" ${PHP}${ASKED_PHP_VERSION}
-            fi          
+          ASKED_PHPMOD_INSTALLED="${APACHE_AVAILABLE_MODS}/${PHP}${ASKED_PHP_VERSION}.conf"
+          if [ -e "$ASKED_PHPMOD_INSTALLED" ]
+          then
+              if [ "$PHPMOD_BASE_VERSION_INSTALLED" != "$ASKED_PHP_VERSION" ]
+              then
+                  if [ "$PHPMOD_INSTALLED" = "1" ]
+                  then
+                      OLD_PHP_VERSION="${PHP}${PHPMOD_BASE_VERSION_INSTALLED}"
+                      $SUDO $DISMOD $OLD_PHP_VERSION > /dev/null
+                  fi
+                  $SUDO $ENMOD $NEW_PHP_VERSION > /dev/null
+                  if [ $? = "0" ]
+                  then
+                      $ECHO -e "Switch php mod to $NEW_PHP_VERSION [${SUCCESS}]"
+                      $SUDO $SYSTEMCTL restart apache2
+                      if [ $? = "0" ]
+                      then
+                          $ECHO -e "Restart of apache [${SUCCESS}]"
+                      else
+                          $ECHO -e "Restart of apache [${FAILED}]"
+                      fi
+                  else
+                      $ECHO -e "Switch php mod to $NEW_PHP_VERSION [${FAILED}]"
+                  fi
+              else
+                  $ECHO "php mod already set to" ${PHP}${ASKED_PHP_VERSION}
+              fi
+          else
+              $ECHO -e "${ITALIC}${BLUE}File does not exist : $ASKED_PHPMOD_INSTALLED${NORMAL}"
+              if [ "$PHPMOD_INSTALLED" = "1" ]
+              then
+                  $ECHO "php mod is currently set to" $PHPMOD_FULL_VERSION_INSTALLED
+              fi
+          fi
         else
-            $ECHO -e "${ITALIC}${BLUE}File does not exist : $ASKED_PHPMOD_INSTALLED${NORMAL}"
-            if [ "$PHPMOD_INSTALLED" = "1" ]
-            then
-                $ECHO "php mod is currently set to" $PHPMOD_FULL_VERSION_INSTALLED
-            fi
+          $ECHO -e "${ITALIC}${BLUE}Module mpm_prefork not enabled${NORMAL}"
         fi
-        
         # php cli
         ASKED_PHPCLI_INSTALLED="${PHP_BASEDIR}/${PHP}${ASKED_PHP_VERSION}"
         if [ -e "$ASKED_PHPCLI_INSTALLED" ]
-        then        
+        then
             if [ "$PHPCLI_BASE_VERSION_INSTALLED" != "$ASKED_PHP_VERSION" ]
             then
                 $SUDO $UPDATE_ALTERNATIVES --set $PHP ${PHP_BASEDIR}/${NEW_PHP_VERSION} > /dev/null
@@ -377,22 +406,22 @@ do
                 else
                     $ECHO -e "Switch php cli to $NEW_PHP_VERSION [${FAILED}]"
                 fi
-            else    
+            else
                 $ECHO "php cli already set to" ${PHP}${ASKED_PHP_VERSION}
-            fi            
+            fi
         else
             $ECHO -e "${ITALIC}${BLUE}File does not exist : $ASKED_PHPCLI_INSTALLED${NORMAL}"
             if [ "$PHPCLI_INSTALLED" = "1" ]
             then
                 $ECHO "php cli is currently set to" $PHPCLI_FULL_VERSION_INSTALLED
             fi
-        fi  
+        fi
 
 
-        # phar    
+        # phar
         ASKED_PHAR_INSTALLED="${PHP_BASEDIR}/${PHAR}${ASKED_PHP_VERSION}"
         if [ -e "$ASKED_PHAR_INSTALLED" ]
-        then        
+        then
             if [ "$PHAR_INSTALLED" = "1" ]
             then
                 if [ "$PHAR_BASE_VERSION_INSTALLED" != "$ASKED_PHP_VERSION" ]
@@ -406,20 +435,20 @@ do
                     fi
                 else
                     $ECHO "phar already linked to" ${PHP}${ASKED_PHP_VERSION}
-                fi    
-            fi    
+                fi
+            fi
         else
             $ECHO -e "${ITALIC}${BLUE}File does not exist : $ASKED_PHAR_INSTALLED${NORMAL}"
             if [ "$PHAR_INSTALLED" = "1" ]
             then
                 $ECHO "phar is currently linked to" $PHAR_FULL_VERSION_INSTALLED
             fi
-        fi  
-            
+        fi
+
         # phar.phar
         ASKED_PHARPHAR_INSTALLED="${PHP_BASEDIR}/${PHARPHAR}${ASKED_PHP_VERSION}"
         if [ -e "$ASKED_PHARPHAR_INSTALLED" ]
-        then        
+        then
             if [ "$PHARPHAR_INSTALLED" = "1" ]
             then
                 if [ "$PHARPHAR_BASE_VERSION_INSTALLED" != "$ASKED_PHP_VERSION" ]
@@ -433,17 +462,17 @@ do
                     fi
                 else
                     $ECHO "phar.phar already linked to" ${PHP}${ASKED_PHP_VERSION}
-                fi    
-            fi  
+                fi
+            fi
         else
             $ECHO -e "${ITALIC}${BLUE}File does not exist : $ASKED_PHARPHAR_INSTALLED${NORMAL}"
             if [ "$PHARPHAR_INSTALLED" = "1" ]
             then
                 $ECHO "phar.phar is currently linked to" $PHARPHAR_FULL_VERSION_INSTALLED
             fi
-        fi  
-            
-        # phpize  
+        fi
+
+        # phpize
         ASKED_PHPIZE_INSTALLED="${PHP_BASEDIR}/${PHPIZE}${ASKED_PHP_VERSION}"
         if [ -e "$ASKED_PHPIZE_INSTALLED" ]
         then
@@ -458,7 +487,7 @@ do
                 fi
             else
                 $ECHO "phpize already linked to" ${PHP}${ASKED_PHP_VERSION}
-            fi    
+            fi
         else
             $ECHO -e "${ITALIC}${BLUE}File does not exist : $ASKED_PHPIZE_INSTALLED${NORMAL}"
             if [ "$PHPIZE_INSTALLED" = "1" ]
@@ -467,7 +496,7 @@ do
             fi
         fi
 
-        # php-config  
+        # php-config
         ASKED_PHPCONFIG_INSTALLED="${PHP_BASEDIR}/${PHPCONFIG}${ASKED_PHP_VERSION}"
         if [ -e "$ASKED_PHPCONFIG_INSTALLED" ]
         then
@@ -482,7 +511,7 @@ do
                 fi
             else
                 $ECHO "php-config already linked to" ${PHP}${PHPCONFIG_BASE_VERSION_INSTALLED}
-            fi    
+            fi
         else
             $ECHO -e "${ITALIC}${BLUE}File does not exist : $ASKED_PHPCONFIG_INSTALLED${NORMAL}"
             if [ "$PHPCONFIG_INSTALLED" = "1" ]
