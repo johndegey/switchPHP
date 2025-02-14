@@ -115,7 +115,6 @@ GET_BASE_VERSION_PHP_MOD() {
     if [ ! -z ${MODS} ]
     then
       local PMFILE=$($BASENAME $MODS)
-      $ECHO $PMFILE
       local PMVERSION=$($ECHO $PMFILE | $CUT -d"p" -f3 | $REV | $CUT -d"." -f2- | $REV)
       $ECHO $PMVERSION
     fi
