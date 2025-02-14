@@ -103,8 +103,8 @@ GET_VERSION_PHP_API() {
 }
 
 CHECK_MODULE_MPM_PREFORK() {
-    local MPMPREFORK=$($A2QUERY -m mpm_prefork 2>/dev/null)
-    if [ "$MPMPREFORK" = "No module matches mpm_prefork (disabled by site administrator)" ]
+    local MPMPREFORK=$($SUDO $A2QUERY -m mpm_prefork 2>/dev/null)
+    if [ "$MPMPREFORK" = "mpm_prefork (enabled by site administrator)" ]
     then
       MPMPREFORK_INSTALLED=1
     fi
@@ -328,7 +328,7 @@ then
     fi
 fi
 
-$(CHECK_MODULE_MPM_PREFORK)
+CHECK_MODULE_MPM_PREFORK
 
 if [ "$1" = "-h" -o "$1" = "--help" ]
 then
