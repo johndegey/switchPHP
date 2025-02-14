@@ -112,7 +112,7 @@ CHECK_MODULE_MPM_PREFORK() {
 
 GET_BASE_VERSION_PHP_MOD() {
     local MODS=$($LS ${APACHE_ENABLED_MODS}/${PHP}*.conf 2> /dev/null )
-    if [ -z ${MODS+x} ]
+    if [ ! -z ${MODS} ]
     then
       local PMFILE=$($BASENAME $MODS)
       $ECHO $PMFILE
