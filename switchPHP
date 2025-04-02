@@ -104,10 +104,12 @@ GET_VERSION_PHP_API() {
 
 CHECK_MODULE_MPM_PREFORK() {
     local MPMPREFORK=$($SUDO $A2QUERY -m mpm_prefork 2>/dev/null)
-    if [ "$MPMPREFORK" = "mpm_prefork (enabled by site administrator)" ]
-    then
-      MPMPREFORK_INSTALLED=1
-    fi
+    # https://stackoverflow.com/questions/229551/how-to-check-if-a-string-contains-a-substring-in-bash/229585#229585
+    case "$MPMPREFORK" in
+        *"mpm_prefork (enabled"* )
+                MPMPREFORK_INSTALLED=1
+                ;;
+    esac
 }
 
 GET_BASE_VERSION_PHP_MOD() {
